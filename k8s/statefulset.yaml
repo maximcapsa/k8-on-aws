@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: myapp
+  namespace: myapp
+  labels:
+    app: myapp
+spec:
+  serviceName: myapp-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      # Spread the two pods across the two nodes for HA. ScheduleAnyway keeps
+      # things working if one node is briefly unavailable.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: myapp
+      initContainers:
+        # Each pod gets its own local-path PVC. Seed it with the pod name so
+        # you can see the Service load-balancing between pods on refresh.
+        - name: seed-data
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - '[ -f /data/hello.txt ] || echo "Served by pod $(hostname) — seeded $(date -u)" > /data/hello.txt'
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      containers:
+        - name: nginx
+          # CI rewrites this line in place; keep the trailing marker.
+          image: REPLACE_WITH_ECR_IMAGE # managed-by-ci
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/nginx/html/data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 1Gi

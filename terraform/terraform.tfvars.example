@@ -1,6 +1,13 @@
-aws_region       = "us-east-1"
-cluster_name     = "k8s-on-aws"
-node_instance_type = "t3.micro"
-desired_node_count = 2
-min_node_count     = 1
-max_node_count     = 3
+aws_region    = "us-east-1"
+name_prefix   = "k8s-on-aws"
+instance_type = "t2.micro" # free-tier eligible (750 hrs/mo for 12 months)
+server_count  = 3          # 3 servers = embedded-etcd HA control plane. Multiple micros 24/7 exceed free tier; tear down when done.
+
+# Using EC2 Instance Connect, so no key pair needed. Leave "" unless you want SSH key access.
+key_name = ""
+
+# Restrict SSH + k8s API to your IP, e.g. "203.0.113.4/32". Default is open to the world.
+admin_cidr = "0.0.0.0/0"
+
+github_repo   = "maximcapsa/k8-on-aws"
+github_branch = "master"

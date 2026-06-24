@@ -1,0 +1,4 @@
+# Shell scripts and cloud-init templates must use LF — they run on Linux
+# (EC2 user_data). CRLF breaks the shebang and emits $'\r' errors.
+*.sh   text eol=lf
+*.tpl  text eol=lf

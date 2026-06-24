@@ -4,9 +4,25 @@ metadata:
   name: myapp
   namespace: myapp
 spec:
+  # NodePort is open on every node; kube-proxy load-balances across both pods.
+  type: NodePort
   selector:
     app: myapp
   ports:
     - port: 80
       targetPort: 80
-  type: LoadBalancer
+      nodePort: 30080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: myapp-headless
+  namespace: myapp
+spec:
+  # Governing headless service required by the StatefulSet.
+  clusterIP: None
+  selector:
+    app: myapp
+  ports:
+    - port: 80
+      targetPort: 80
