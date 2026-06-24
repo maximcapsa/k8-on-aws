@@ -2,18 +2,18 @@ name: Build & Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - 'app/**'
+  workflow_dispatch: {}   # allow manual runs (e.g. to build the first image)
 
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: myapp
-  K8S_MANIFESTS_DIR: k8s
 
 permissions:
-  id-token: write
-  contents: write
+  id-token: write   # to assume the AWS role via OIDC
+  contents: write   # to commit the updated image tag back
 
 jobs:
   build-and-deploy:
@@ -21,36 +21,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
+      - name: Log in to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push image
-        id: build-image
+      - name: Build and push image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./app
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY"
+          docker build -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest" ./app
+          docker push "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+          echo "IMAGE_REF=$IMAGE:${{ github.sha }}" >> "$GITHUB_ENV"
 
-      - name: Update deployment manifest
-        env:
-          IMAGE_URI: ${{ steps.build-image.outputs.image }}
+      - name: Pin StatefulSet to the new image
         run: |
-          sed -i "s|\${ECR_REPOSITORY}:\${IMAGE_TAG}|$IMAGE_URI|" "$K8S_MANIFESTS_DIR/deployment.yaml"
+          # Idempotent: rewrites the marked line in place, never the busybox
+          # initContainer line (which has no marker).
+          sed -i -E "s|image: [^#]*# managed-by-ci|image: ${IMAGE_REF} # managed-by-ci|" k8s/statefulset.yaml
+          grep "managed-by-ci" k8s/statefulset.yaml
 
-      - name: Commit and push updated manifest
+      - name: Commit updated manifest
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add "$K8S_MANIFESTS_DIR/deployment.yaml"
-          git commit -m "Update image tag to ${{ github.sha }}" || exit 0
+          git add k8s/statefulset.yaml
+          git commit -m "Deploy ${{ github.sha }}" || { echo "no change"; exit 0; }
           git push
