@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>K8s on AWS</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 4rem; background: #1a1a2e; color: #eee; }
+    h1 { color: #e94560; }
+    .card { background: #16213e; border-radius: 8px; padding: 2rem; margin: 2rem auto; max-width: 600px; }
+    a { color: #0f3460; }
+  </style>
+</head>
+<body>
+  <h1>Kubernetes on AWS</h1>
+  <div class="card">
+    <p>Deployed via ArgoCD + GitHub Actions</p>
+    <p>Hostname: <strong id="hostname"></strong></p>
+    <p>PVC data: <strong id="pvc-data">loading...</strong></p>
+  </div>
+  <script>
+    document.getElementById('hostname').textContent = window.location.hostname;
+    fetch('/data/hello.txt')
+      .then(r => r.text())
+      .then(t => document.getElementById('pvc-data').textContent = t)
+      .catch(() => document.getElementById('pvc-data').textContent = 'unavailable');
+  </script>
+</body>
+</html>
